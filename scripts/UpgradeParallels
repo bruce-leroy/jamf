@@ -1,0 +1,93 @@
+#!/usr/bin/ruby
+
+#Uninstalls old version (/Applications/Parallels)
+#stops the currenly running vms
+#does the install
+#
+#
+#
+
+#prlctl=`which prlctl`
+#prlsrvctl=`which prlsrvctl`
+
+def user()
+	user=`who|grep console|awk '{print $1}'`.chomp
+	unless user
+		user=false
+	end
+	return user
+end
+def install()
+	puts "In the install function"
+	`/usr/sbin/installer -pkg "/private/tmp/parallels/Parallels\ Desktop\ Autodeploy.pkg" -target /`
+end
+def deleteOld()
+	if File.directory?('/Applications/Parallels')
+	 `rm -rf /Applications/Parallels`
+	end
+end
+def isRunning()
+	running=false
+	output=`ps aux|grep Parallels|grep -v grep`
+	if output.include?('Parallels')
+		running=true
+	end
+	return running
+end
+def vmRunning()
+	up=false
+	if `lsof|grep hdd`
+		up=true
+	end
+	return up
+end
+def isInstalled()
+	there=false
+	if File.directory?('/Applications/Parallels Desktop.app')
+		there=true
+	end
+	return there
+end
+def stopVm(vm, user)
+	`sudo -u #{user} /usr/local/bin/prlctl stop #{vm}`
+	puts "sudo -u #{user} /usr/local/bin/prlctl stop #{vm}"
+end
+
+def getVmList(user)
+	running_vms_string=`sudo -u #{user} /usr/local/bin/prlctl list|grep running|awk '{print $1}'`
+	running_vms_list=running_vms_string.split("\n")
+	return running_vms_list
+end
+def prepUpgrade(user)
+#shutsdown all vms and removes the older version
+	deleteOld()
+	running=getVmList(user)
+	running.each do |running_vm|
+		stopVm(running_vm, user)
+		sleep(30)
+	end
+	#`sudo -u #{user} /usr/local/bin/prlsrvctl shutdown`
+	`sudo -u #{user} osascript -e 'quit application "Parallels Desktop.app"'`
+end
+def notify()
+	output=`/Library/"Application\ Support"/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper -windowType utility -title "Pending Update" -heading "Parallels Desktop is running" -description "This computer has a pending update for Parallels Desktop, but Parallels Desktop is running.  Please save your work and quit the application." -button1 "Delay" -button2 "Start Now" -showDelayOptions  "120, 300, 1200" -timeout 900 -icon "/Applications/Parallels\ Desktop.app/Contents/Resources/Parallels.icns"`
+	button=output[-1..-1]
+	delay=output.chop
+	if  button == "2" ; then
+		delay="0"
+	end
+	`/Library/"Application\ Support"/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper -windowType utility -title "Application Update" -heading "Parallels Desktop Update" -description "Quitting Parallels Desktop and installing update" -button1 "OK" -timeout 10 -icon "/Applications/Parallels\ Desktop.app/Contents/Resources/Parallels.icns"`
+	mytime=delay.to_i
+	sleep mytime
+end
+
+if !isInstalled()
+	install()
+else
+	username=user()
+	if isRunning()
+		prepUpgrade(username)
+	end
+	install()
+	`/Library/"Application\ Support"/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper -windowType utility -title "Application Update" -heading "Parallels Desktop Update" -description "The update is complete Parallels Desktop.  You may open and continue using the application.  If you have any problems, please contact IT Support." -button1 "OK" -timeout 10 -icon "/Applications/Parallels\ Desktop.app/Contents/Resources/Parallels.icns"`
+end
