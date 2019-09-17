@@ -1,0 +1,10 @@
+#!/bin/bash
+
+result="65536"
+plist=/Applications/VirtualBox.app/Contents/Info.plist
+if [ -e "${plist}" ] ; then
+	version=$(/usr/bin/defaults read "${plist}" CFBundleShortVersionString)
+	result=$(echo "${version}"|tr -d '.')
+fi
+
+echo "<result>${result}</result>"
